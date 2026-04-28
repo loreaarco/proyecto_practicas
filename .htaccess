@@ -1,0 +1,17 @@
+Options -Indexes
+RewriteEngine On
+
+# ── Servir assets directamente desde public/ ─────────────────
+RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+
+# ── Bloquear ficheros sensibles ───────────────────────────────
+<FilesMatch "\.(env|sql|log|gitignore|gitkeep)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# ── Redirigir todo lo demás a public/index.php ───────────────
+# (mantiene REQUEST_URI original para que el router funcione)
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ public/index.php [L,QSA]

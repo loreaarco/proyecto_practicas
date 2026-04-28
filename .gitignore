@@ -1,0 +1,24 @@
+# Entorno y credenciales — NUNCA al repositorio
+.env
+
+# Archivos subidos por usuarios
+storage/facturas/*/
+
+# Logs
+storage/logs/*.log
+
+# Temporales del sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# El placeholder de directorios vacíos sí se incluye
+!storage/facturas/.gitkeep
+!storage/logs/.gitkeep
