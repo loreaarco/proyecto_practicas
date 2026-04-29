@@ -108,7 +108,10 @@ class AdminController extends Controller
         $db = Database::getInstance();
 
         $campos = [
-            'comercializadora_id', 'nombre_oferta', 'tarifa_acceso', 'vigente_desde',
+            'comercializadora_id',
+            'nombre_oferta',
+            'tarifa_acceso',
+            'vigente_desde',
         ];
         foreach ($campos as $c) {
             if (empty($_POST[$c])) {
@@ -133,18 +136,18 @@ class AdminController extends Controller
         );
         $stmt->execute([
             ':cid'   => (int) $_POST['comercializadora_id'],
-            ':nombre'=> htmlspecialchars(trim($_POST['nombre_oferta']), ENT_QUOTES, 'UTF-8'),
+            ':nombre' => htmlspecialchars(trim($_POST['nombre_oferta']), ENT_QUOTES, 'UTF-8'),
             ':tipo'  => $_POST['tipo_suministro'] ?? 'electricidad',
-            ':acceso'=> htmlspecialchars(trim($_POST['tarifa_acceso']), ENT_QUOTES, 'UTF-8'),
+            ':acceso' => htmlspecialchars(trim($_POST['tarifa_acceso']), ENT_QUOTES, 'UTF-8'),
             ':ep1'   => (float) ($_POST['precio_energia_p1'] ?? 0),
             ':ep2'   => (float) ($_POST['precio_energia_p2'] ?? 0),
             ':ep3'   => (float) ($_POST['precio_energia_p3'] ?? 0),
             ':pp1'   => (float) ($_POST['precio_potencia_p1'] ?? 0),
             ':pp2'   => (float) ($_POST['precio_potencia_p2'] ?? 0),
             ':desc'  => (float) ($_POST['descuento_pct'] ?? 0),
-            ':ctipo' => in_array($_POST['comision_tipo'] ?? '', ['fija','porcentaje']) ? $_POST['comision_tipo'] : 'fija',
+            ':ctipo' => in_array($_POST['comision_tipo'] ?? '', ['fija', 'porcentaje']) ? $_POST['comision_tipo'] : 'fija',
             ':cval'  => (float) ($_POST['comision_valor'] ?? 0),
-            ':cper'  => in_array($_POST['comision_periodicidad'] ?? '', ['unica','anual','mensual']) ? $_POST['comision_periodicidad'] : 'anual',
+            ':cper'  => in_array($_POST['comision_periodicidad'] ?? '', ['unica', 'anual', 'mensual']) ? $_POST['comision_periodicidad'] : 'anual',
             ':desde' => $_POST['vigente_desde'],
         ]);
 
@@ -204,7 +207,7 @@ class AdminController extends Controller
         $stmt->execute([
             ':rol'      => $rolId,
             ':nombre'   => $nombre,
-            ':apellidos'=> htmlspecialchars(trim($_POST['apellidos'] ?? ''), ENT_QUOTES, 'UTF-8') ?: null,
+            ':apellidos' => htmlspecialchars(trim($_POST['apellidos'] ?? ''), ENT_QUOTES, 'UTF-8') ?: null,
             ':email'    => $email,
             ':hash'     => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
         ]);

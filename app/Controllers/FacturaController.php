@@ -51,7 +51,6 @@ class FacturaController extends Controller
 
             Session::flash('success', 'Factura subida correctamente. Puedes lanzar la extracción de datos.');
             $this->redirect("/facturas/{$facturaId}");
-
         } catch (RuntimeException $e) {
             Session::flash('error', $e->getMessage());
             $this->redirect("/clientes/{$clienteId}/facturas/subir");
@@ -62,10 +61,11 @@ class FacturaController extends Controller
     {
         Auth::requireAuth();
         $factura = $this->getFacturaOr404($id);
+        $cliente = $this->clienteRepo->buscarPorId($factura['cliente_id']);
         $datos   = $this->facturaRepo->getDatosExtraidos($id);
         $success = Session::getFlash('success');
         $error   = Session::getFlash('error');
-        $this->render('facturas/show', compact('factura', 'datos', 'success', 'error'));
+        $this->render('facturas/show', compact('factura', 'datos', 'cliente', 'success', 'error'));
     }
 
     /**
@@ -89,10 +89,18 @@ class FacturaController extends Controller
         $factura = $this->getFacturaOr404($id);
 
         $camposNumericos = [
-            'potencia_p1_kw', 'potencia_p2_kw', 'potencia_p3_kw',
-            'consumo_p1_kwh', 'consumo_p2_kwh', 'consumo_p3_kwh',
-            'consumo_total_kwh', 'importe_potencia', 'importe_energia',
-            'importe_impuestos', 'importe_total', 'dias_facturados',
+            'potencia_p1_kw',
+            'potencia_p2_kw',
+            'potencia_p3_kw',
+            'consumo_p1_kwh',
+            'consumo_p2_kwh',
+            'consumo_p3_kwh',
+            'consumo_total_kwh',
+            'importe_potencia',
+            'importe_energia',
+            'importe_impuestos',
+            'importe_total',
+            'dias_facturados',
         ];
 
         $datos = [];
@@ -126,14 +134,14 @@ class FacturaController extends Controller
             // --- SOLUCIÓN TEMPORAL SIN COMPOSER ---
             // Tenemos que incluir los archivos manualmente. 
             // Nota: Esto es un poco rudimentario. Lo ideal es usar el autoload.php que genera composer.
-            
+
             $rutaBase = BASE_PATH . '/vendor/smalot/pdfparser/src/Smalot/PdfParser/';
 
             if (!file_exists($rutaBase . 'Parser.php')) {
                 throw new Exception("La librería PdfParser no se encuentra en /vendor/");
             }
 
-            
+
             define('BASE_PATH', dirname(__DIR__));
 
             require_once BASE_PATH . '/vendor/autoload.php';
@@ -141,11 +149,11 @@ class FacturaController extends Controller
             require_once BASE_PATH . '/config/app.php';
             // ---------------------------------------
 
-            $uploadService = new FacturaUploadService(); 
+            $uploadService = new FacturaUploadService();
             $rutaAbsoluta  = $uploadService->rutaAbsoluta($factura['ruta_almacen']);
-            
+
             // Usamos el nombre completo de la clase con su namespace
-            $parser = new \Smalot\PdfParser\Parser(); 
+            $parser = new \Smalot\PdfParser\Parser();
             $pdf    = $parser->parseFile($rutaAbsoluta);
             $texto  = $pdf->getText();
 
@@ -155,7 +163,6 @@ class FacturaController extends Controller
             $this->facturaRepo->finalizarExtraccionIA($id, $datosIA, $intentos + 1);
 
             Session::flash('success', '¡Análisis con el Módulo LLM completado!');
-
         } catch (Exception $e) {
             $this->facturaRepo->actualizarEstadoExtraccion($id, 'error', $intentos + 1);
             Logger::error('FacturaController', 'Error', ['id' => $id, 'error' => $e->getMessage()]);
@@ -218,5 +225,37 @@ class FacturaController extends Controller
             exit;
         }
         return $cliente;
+    }
+
+    /**
+     * Endpoint AJAX para el chat interactivo con el LLM.
+     * Flujo general:
+     * 1. Verifica autenticación del usuario
+     * 2. Obtiene la factura correspondiente
+     * 3. Recibe el mensaje del usuario
+     * 4. Envía el mensaje al servicio LLM
+     * 5. Devuelve la respuesta al frontend
+     */
+    public function chat(int $id): void
+    {
+        Auth::requireAuth();
+        $factura = $this->getFacturaOr404($id);
+        $mensaje = $_POST['mensaje'] ?? '';
+
+        if (empty($mensaje)) {
+            $this->json(['respuesta' => 'Por favor, escribe un mensaje.'], 400);
+        }
+
+        try {
+            $datosJson = !empty($factura['datos_json']) ? json_decode($factura['datos_json'], true) : [];
+
+            $llm = new LlmAnalisisService();
+            $respuesta = $llm->conversar($mensaje, $datosJson);
+
+            $this->json(['respuesta' => $respuesta]);
+        } catch (Exception $e) {
+            Logger::error('FacturaController@chat', $e->getMessage());
+            $this->json(['respuesta' => 'Error interno en el servidor de IA.'], 500);
+        }
     }
 }

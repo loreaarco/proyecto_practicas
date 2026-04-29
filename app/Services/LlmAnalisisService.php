@@ -11,14 +11,12 @@ class LlmAnalisisService
     private string $apiKey;
     private string $model;
     private PDO $db;
-
     public function __construct()
     {
         $this->apiKey = env('OPENAI_API_KEY', '');
         $this->model  = env('OPENAI_MODEL', 'gpt-4o');
         $this->db     = Database::getInstance();
     }
-
     /**
      * Analiza el texto de la factura y razona sobre las tarifas.
      */
@@ -27,7 +25,6 @@ class LlmAnalisisService
         if (empty($this->apiKey) || str_starts_with($this->apiKey, 'sk-xxx')) {
             throw new RuntimeException('API Key de OpenAI no configurada. Revisa el fichero .env');
         }
-
         $tarifas = $this->obtenerCatalogoTarifas();
         $prompt  = $this->construirPrompt($textoFactura, $tarifas);
 
@@ -132,7 +129,7 @@ class LlmAnalisisService
     {
         return <<<PROMPT
 Analiza el siguiente texto de una factura de energía y el catálogo de tarifas disponibles.
-Deberás extraer los datos de la factura, calcular el coste que tendría el cliente con las distintas tarifas aplicables (misma tarifa de acceso y tipo), identificar la mejor oferta que suponga el mayor ahorro, y calcular la comisión para la empresa según las reglas de la tarifa ganadora.
+Deberás extraer los datos de la factura, calcular el coste que tendría el cliente con las distintas tarifas aplicables (misma tarifa de acceso y tipo), identificar la mejor oferta que suponga el mayor ahorro, y listar OBLIGATORIAMENTE las siguientes 3 mejores alternativas del catálogo para realizar una comparativa completa, calculando ahorro y comisión para cada una.
 
 Reglas para cálculos (estimación anual):
 - Anualiza el consumo y la potencia según los días facturados (multiplica por 365 / dias_facturados).
@@ -181,9 +178,75 @@ Devuelve EXCLUSIVAMENTE un JSON con la siguiente estructura exacta, sin texto ad
   "mejor_oferta": "Nombre de la tarifa ganadora",
   "ahorro_estimado": número decimal,
   "recomendacion": "Texto recomendación",
-  "comision_estimada": número decimal
+  "comision_estimada": número decimal,
+  "otras_opciones": [
+    { "nombre_oferta": "string", "comercializadora": "string", "ahorro_estimado": número, "comision_estimada": número },
+    { "nombre_oferta": "string", "comercializadora": "string", "ahorro_estimado": número, "comision_estimada": número },
+    { "nombre_oferta": "string", "comercializadora": "string", "ahorro_estimado": número, "comision_estimada": número }
+  ]
 }
 PROMPT;
+    }
+
+    /**
+     * Mantiene una conversación interactiva sobre la factura.
+     * 
+     *  * Esta función envía el mensaje del usuario a la API de OpenAI junto con:
+     * - Los datos de la factura previamente analizada
+     * - El catálogo de tarifas energéticas disponibles
+     * 
+     * La IA responde como un consultor energético experto.
+     */
+    public function conversar(string $mensajeUsuario, array $datosFactura): string
+    {
+        if (empty($this->apiKey) || str_starts_with($this->apiKey, 'sk-xxx')) {
+            throw new RuntimeException('API Key de OpenAI no configurada.');
+        }
+
+        $tarifas = $this->obtenerCatalogoTarifas();
+
+        $payload = [
+            'model'       => $this->model,
+            'temperature' => 0.7,
+            'messages'    => [
+                [
+                    'role'    => 'system',
+                    'content' => 'Eres un consultor energético experto. El usuario te hará preguntas sobre una factura específica que ya has analizado. Tienes acceso a los datos extraídos de la factura y al catálogo de tarifas disponibles para razonar tus respuestas. Sé conciso, profesional y ayuda al usuario a entender sus ahorros y opciones.'
+                ],
+                [
+                    'role'    => 'system',
+                    'content' => "DATOS DE LA FACTURA ANALIZADA:\n" . json_encode($datosFactura, JSON_UNESCAPED_UNICODE) .
+                        "\n\nCATÁLOGO DE TARIFAS:\n" . $tarifas
+                ],
+                [
+                    'role'    => 'user',
+                    'content' => $mensajeUsuario
+                ]
+            ]
+        ];
+
+        $ch = curl_init('https://api.openai.com/v1/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $this->apiKey,
+            ],
+        ]);
+
+        $raw = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status !== 200) {
+            return "Lo siento, hubo un error al procesar tu consulta con la IA.";
+        }
+
+        $decoded = json_decode($raw, true);
+        return $decoded['choices'][0]['message']['content'] ?? "No he podido generar una respuesta.";
     }
 
     private function normalizarDatos(array $datos): array
@@ -191,12 +254,24 @@ PROMPT;
         // Asegurar que los numéricos son floats
         $camposDecimales = [
             'consumo_total_kwh',
-            'potencia_p1_kw','potencia_p2_kw','potencia_p3_kw',
-            'potencia_p4_kw','potencia_p5_kw','potencia_p6_kw',
-            'consumo_p1_kwh','consumo_p2_kwh','consumo_p3_kwh',
-            'consumo_p4_kwh','consumo_p5_kwh','consumo_p6_kwh',
-            'importe_potencia','importe_energia','importe_impuestos','importe_total',
-            'ahorro_estimado', 'comision_estimada'
+            'potencia_p1_kw',
+            'potencia_p2_kw',
+            'potencia_p3_kw',
+            'potencia_p4_kw',
+            'potencia_p5_kw',
+            'potencia_p6_kw',
+            'consumo_p1_kwh',
+            'consumo_p2_kwh',
+            'consumo_p3_kwh',
+            'consumo_p4_kwh',
+            'consumo_p5_kwh',
+            'consumo_p6_kwh',
+            'importe_potencia',
+            'importe_energia',
+            'importe_impuestos',
+            'importe_total',
+            'ahorro_estimado',
+            'comision_estimada'
         ];
 
         foreach ($camposDecimales as $campo) {
