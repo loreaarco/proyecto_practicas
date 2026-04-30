@@ -125,7 +125,27 @@
                             <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:3px">CUPS</div>
                             <div style="font-size:12px;font-family:monospace"><?= htmlspecialchars($datos['cups'] ?? '—') ?></div>
                         </div>
+                        <?php if (!empty($datos['direccion_suministro'])): ?>
+                            <div class="col-12">
+                                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:3px">
+                                    <i class="bi bi-geo-alt me-1"></i>Dirección de suministro
+                                </div>
+                                <div style="font-size:13.5px"><?= htmlspecialchars($datos['direccion_suministro']) ?></div>
+                            </div>
+                        <?php endif; ?>
                     </div>
+
+                    <?php if (!empty($datos['direccion_suministro'])): ?>
+                        <div style="height:260px;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);margin-bottom:16px">
+                            <iframe
+                                src="https://maps.google.com/maps?q=<?= urlencode($datos['direccion_suministro'] . ', España') ?>&output=embed&hl=es&z=16"
+                                width="100%" height="260"
+                                style="border:0;display:block"
+                                allowfullscreen loading="lazy"
+                                referrerpolicy="no-referrer-when-downgrade">
+                            </iframe>
+                        </div>
+                    <?php endif; ?>
 
                     <hr>
 
@@ -188,6 +208,8 @@
             </div>
         <?php endif; ?>
 
+
+        <!-- EMPIEZA EL MODULO LLM-->
         <?php
         $datosJson = !empty($factura['datos_json']) ? json_decode($factura['datos_json'], true) : [];
         if (!empty($datosJson)):
@@ -576,39 +598,54 @@
                         /* LLAMADA AL BACKEND */
                         /* ============================= */
                         try {
-                            const response =
-                                await fetch(
-                                    '<?= BASE_URL ?>/facturas/<?= $factura['id'] ?>/chat', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/x-www-form-urlencoded'
-                                        },
-                                        body: 'mensaje=' +
-                                            encodeURIComponent(mensaje)
-                                    }
-                                );
+                            // Eliminamos posible barra final del pathname antes de añadir /chat
+                            const cleanPath = window.location.pathname.endsWith('/') ?
+                                window.location.pathname.slice(0, -1) :
+                                window.location.pathname;
+                            const response = await fetch(window.location.origin + cleanPath + '/chat', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded'
+                                },
+                                body: 'mensaje=' +
+                                    encodeURIComponent(mensaje)
+                            });
                             const data =
                                 await response.json();
                             /* Eliminar indicador */
                             loadingMsg.remove();
+
+                            /* Cargar marked si no está */
+                            if (typeof marked === 'undefined') {
+                                const script = document.createElement('script');
+                                script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+                                document.head.appendChild(script);
+                            }
+
                             /* Mostrar respuesta IA */
-                            const aiMsg =
-                                document.createElement('div');
-                            aiMsg.className =
-                                'chat-message ai mb-3';
-                            aiMsg.innerHTML =
-                                `<div class="message-content">
-                ${data.respuesta}
-            </div>`;
-                            container.appendChild(aiMsg);
-                            container.scrollTop =
-                                container.scrollHeight;
+                            const aiMsg = document.createElement('div');
+                            aiMsg.className = 'chat-message ai mb-3';
+
+                            const renderResponse = () => {
+                                const htmlContent = typeof marked !== 'undefined' ? marked.parse(data.respuesta) : data.respuesta;
+                                aiMsg.innerHTML = `<div class="message-content text-white">${htmlContent}</div>`;
+                                container.appendChild(aiMsg);
+                                container.scrollTop = container.scrollHeight;
+                            };
+
+                            if (typeof marked !== 'undefined') {
+                                renderResponse();
+                            } else {
+                                setTimeout(renderResponse, 300);
+                            }
+
                         } catch (error) {
                             /* Error de conexión */
+                            console.error('Error chat:', error);
                             loadingMsg.innerHTML =
                                 `<div class="p-2 rounded bg-danger text-white small">
-                Error al conectar con la IA.
-            </div>`;
+                                    Error de conexión: ${error.message}. Revisa la consola del navegador.
+                                </div>`;
                         }
                     });
             </script>

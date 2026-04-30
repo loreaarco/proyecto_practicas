@@ -31,8 +31,6 @@
                         <th>Comercializadora</th>
                         <th>Periodo</th>
                         <th>Importe</th>
-                        <th>Ahorro Estimado</th>
-                        <th>Comisión</th>
                         <th>Estado extracción</th>
                         <th>Fecha subida</th>
                         <th></th>
@@ -42,13 +40,6 @@
                     <?php foreach ($facturas as $f):
                         $badgeMap = ['pendiente'=>'warning','procesando'=>'info','completada'=>'success','error'=>'danger'];
                         $badge = $badgeMap[$f['estado_extraccion']] ?? 'secondary';
-                        
-                        // Parsear datos JSON si están presentes
-                        $dj = !empty($f['datos_json']) ? json_decode($f['datos_json'], true) : [];
-                        $comercializadora = $f['comercializadora'] ?? $dj['comercializadora'] ?? '—';
-                        $importe = $f['importe_total'] ?? $dj['importe_total'] ?? null;
-                        $periodo_inicio = $f['periodo_inicio'] ?? $dj['periodo_inicio'] ?? null;
-                        $periodo_fin = $f['periodo_fin'] ?? $dj['periodo_fin'] ?? null;
                     ?>
                         <tr>
                             <td>
@@ -57,16 +48,14 @@
                                     <?= htmlspecialchars($f['nombre_original']) ?>
                                 </a>
                             </td>
-                            <td class="small"><?= htmlspecialchars($comercializadora) ?></td>
+                            <td class="small"><?= htmlspecialchars($f['comercializadora'] ?? '—') ?></td>
                             <td class="small">
-                                <?php if ($periodo_inicio && $periodo_fin): ?>
-                                    <?= date('d/m/Y', strtotime($periodo_inicio)) ?>
-                                    — <?= date('d/m/Y', strtotime($periodo_fin)) ?>
+                                <?php if ($f['periodo_inicio'] && $f['periodo_fin']): ?>
+                                    <?= date('d/m/Y', strtotime($f['periodo_inicio'])) ?>
+                                    — <?= date('d/m/Y', strtotime($f['periodo_fin'])) ?>
                                 <?php else: ?>—<?php endif; ?>
                             </td>
-                            <td><?= $importe ? number_format((float)$importe, 2, ',', '.') . ' €' : '—' ?></td>
-                            <td class="text-success fw-bold"><?= isset($f['max_ahorro']) ? number_format((float)$f['max_ahorro'], 2, ',', '.') . ' €' : '—' ?></td>
-                            <td class="text-primary"><?= isset($f['comision_estimada']) ? number_format((float)$f['comision_estimada'], 2, ',', '.') . ' €' : '—' ?></td>
+                            <td><?= $f['importe_total'] ? number_format($f['importe_total'], 2, ',', '.') . ' €' : '—' ?></td>
                             <td><span class="badge bg-<?= $badge ?>"><?= $f['estado_extraccion'] ?></span></td>
                             <td class="small text-muted"><?= date('d/m/Y', strtotime($f['created_at'])) ?></td>
                             <td>
